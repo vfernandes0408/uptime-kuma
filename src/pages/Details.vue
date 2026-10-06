@@ -44,7 +44,7 @@
                 <span v-if="monitor.type === 'ping'">Ping: {{ monitor.hostname }}</span>
                 <span v-if="monitor.type === 'traceroute'">
                     Traceroute: {{ monitor.hostname }}
-                    <pre v-if="monitor.traceroute_last_result" class="traceroute-output mt-2">{{ monitor.traceroute_last_result }}</pre>
+                    <pre v-if="lastHeartBeat && lastHeartBeat.msg" class="traceroute-output mt-2">{{ lastHeartBeat.msg }}</pre>
                 </span>
                 <span v-if="monitor.type === 'globalping'">
                     <a v-if="monitor.subtype === 'http'" :href="monitor.url" target="_blank" rel="noopener noreferrer">
