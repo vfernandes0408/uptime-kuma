@@ -41,14 +41,22 @@ class TracerouteMonitorType extends MonitorType {
 
         const output = result.stdout?.toString?.() || "";
         const hops = this.parse(output);
-        const reached = this.destinationReached(hops, target);
+        const destinationReached = this.destinationReached(hops, target);
+        const quality = this.pathQuality(hops);
+        const success = destinationReached && quality.failureRatio < 0.5;
 
         heartbeat.ping = Date.now() - started;
-        heartbeat.traceroute = JSON.stringify({ target, ipv6: !!monitor.tracerouteIPv6, hops });
-        heartbeat.msg = this.message(output, reached, hops.length);
+        heartbeat.traceroute = JSON.stringify({
+            target,
+            ipv6: !!monitor.tracerouteIPv6,
+            hops,
+            destinationReached,
+            ...quality,
+        });
+        heartbeat.msg = this.message(output, success, hops.length, destinationReached, quality);
 
-        if (!reached) {
-            throw new Error(this.message(output, false, hops.length));
+        if (!success) {
+            throw new Error(this.message(output, false, hops.length, destinationReached, quality));
         }
 
         heartbeat.status = UP;
@@ -115,6 +123,30 @@ class TracerouteMonitorType extends MonitorType {
         return !!last && last.probes.some((probe) => probe.ip === target);
     }
 
+    pathQuality(hops) {
+        if (!hops.length) {
+            return {
+                totalHops: 0,
+                failedHops: 0,
+                failureRatio: 1,
+            };
+        }
+
+        const failedHops = hops.filter((hop) => {
+            if (!hop.probes.length) {
+                return true;
+            }
+
+            return hop.probes.every((probe) => probe.rtt == null);
+        }).length;
+
+        return {
+            totalHops: hops.length,
+            failedHops,
+            failureRatio: Number((failedHops / hops.length).toFixed(3)),
+        };
+    }
+
     compact(output) {
         return String(output || "Traceroute failed").replace(/\s+/g, " ").trim().slice(0, 1024);
     }
@@ -128,13 +160,26 @@ class TracerouteMonitorType extends MonitorType {
             .slice(0, 4096);
     }
 
-    message(output, reached, hops) {
-        const status = reached ? "Destination reached" : "Destination not reached";
+    message(output, success, hops, destinationReached, quality) {
+        let status;
+
+        if (success) {
+            status = "Destination reached";
+        } else if (destinationReached) {
+            status = "Destination reached, but path quality is poor";
+        } else {
+            status = "Destination not reached";
+        }
+
+        const qualityText = quality.totalHops
+            ? " (" + quality.failedHops + "/" + quality.totalHops + " hops without response)"
+            : "";
+
         const formattedOutput = this.formatTraceroute(output);
 
         return formattedOutput
-            ? status + " in " + hops + " hops:\n" + formattedOutput
-            : status + " in " + hops + " hops";
+            ? status + " in " + hops + " hops" + qualityText + ":\n" + formattedOutput
+            : status + " in " + hops + " hops" + qualityText;
     }
 }
 
