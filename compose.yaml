@@ -7,7 +7,14 @@ services:
     image: uptime-kuma-traceroute:latest
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      # Persistent Docker volume: survives image rebuilds, container recreation and Dokploy redeploys.
+      - uptime-kuma-data:/app/data
+      # Legacy bind mount used only for the first migration from the previous ./data setup.
+      - ./data:/legacy-data:ro
     ports:
       # <Host Port>:<Container Port>
       - "3001:3001"
+
+volumes:
+  uptime-kuma-data:
+    name: uptime-kuma-data
