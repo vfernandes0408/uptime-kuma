@@ -620,6 +620,12 @@ app.use(function (req, res, next) {
                 bean.ntp_time_offset_threshold = monitor.ntpTimeOffsetThreshold;
                 bean.ntp_root_dispersion_threshold = monitor.ntpRootDispersionThreshold;
 
+                // traceroute advanced options
+                bean.tracerouteMaxHops = monitor.tracerouteMaxHops;
+                bean.tracerouteProbes = monitor.tracerouteProbes;
+                bean.tracerouteTimeout = monitor.tracerouteTimeout;
+                bean.tracerouteIPv6 = Boolean(monitor.tracerouteIPv6);
+
                 // ping advanced options
                 bean.ping_numeric = monitor.ping_numeric;
                 bean.ping_count = monitor.ping_count;
