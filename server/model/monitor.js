@@ -208,7 +208,7 @@ class Monitor extends BeanModel {
             tracerouteMaxHops: this.traceroute_max_hops,
             tracerouteProbes: this.traceroute_probes,
             tracerouteTimeout: this.traceroute_timeout,
-            tracerouteIPv6: Boolean(this.traceroute_ipv6),
+            tracerouteIPv6: Boolean(this.traceroute_i_pv6),
             sftpPath: this.sftpPath,
             sshAuthMethod: this.sshAuthMethod || "password",
 
