@@ -119,9 +119,22 @@ class TracerouteMonitorType extends MonitorType {
         return String(output || "Traceroute failed").replace(/\s+/g, " ").trim().slice(0, 1024);
     }
 
+    formatTraceroute(output) {
+        return String(output || "")
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join("\n")
+            .slice(0, 4096);
+    }
+
     message(output, reached, hops) {
-        return (reached ? "Destination reached" : "Destination not reached") +
-            " in " + hops + " hops: " + this.compact(output);
+        const status = reached ? "Destination reached" : "Destination not reached";
+        const formattedOutput = this.formatTraceroute(output);
+
+        return formattedOutput
+            ? status + " in " + hops + " hops:\n" + formattedOutput
+            : status + " in " + hops + " hops";
     }
 }
 
