@@ -6,6 +6,9 @@ services:
       target: release
     image: uptime-kuma-traceroute:latest
     restart: unless-stopped
+    environment:
+      # true = keep existing database/data, false = erase all data and create a new database.
+      - UPTIME_KUMA_USE_EXISTING_DB=true
     volumes:
       # Persistent Docker volume: survives image rebuilds, container recreation and Dokploy redeploys.
       - uptime-kuma-data:/app/data
