@@ -33,6 +33,12 @@ LABEL org.opencontainers.image.source="https://github.com/louislam/uptime-kuma"
 
 ENV UPTIME_KUMA_IS_CONTAINER=1
 
+# Traceroute monitor dependency
+# Install in the final runtime image so the monitor also works with the pre-built Uptime Kuma base image.
+RUN apt update \\
+    && apt --yes --no-install-recommends install traceroute \\
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy app files from build layer
 COPY --chown=node:node --from=build /app /app
 
