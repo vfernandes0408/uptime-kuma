@@ -43,7 +43,12 @@ class TracerouteMonitorType extends MonitorType {
         const hops = this.parse(output);
         const destinationReached = this.destinationReached(hops, target);
         const quality = this.pathQuality(hops);
-        const success = destinationReached && quality.failureRatio < 0.5;
+        // A traceroute can be considered healthy when every observed hop responds,
+        // even if the configured max-hops limit is reached before the final target.
+        // This is useful for monitoring path/connectivity rather than only end-to-end reachability.
+        const success = quality.totalHops > 0
+            && quality.failedHops === 0
+            && (destinationReached || hops.length >= maxHops || quality.failureRatio < 0.5);
 
         heartbeat.ping = Date.now() - started;
         heartbeat.traceroute = JSON.stringify({
@@ -163,8 +168,10 @@ class TracerouteMonitorType extends MonitorType {
     message(output, success, hops, destinationReached, quality) {
         let status;
 
-        if (success) {
+        if (destinationReached && success) {
             status = "Destination reached";
+        } else if (success) {
+            status = "Path responsive, destination not reached within max hops";
         } else if (destinationReached) {
             status = "Destination reached, but path quality is poor";
         } else {
