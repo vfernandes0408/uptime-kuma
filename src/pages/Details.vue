@@ -366,7 +366,7 @@
                             <td :class="{ 'border-0': !beat.msg }">
                                 <Datetime :value="beat.time" />
                             </td>
-                            <td class="border-0">{{ beat.msg }}</td>
+                            <td class="border-0" :class="{ 'traceroute-message': monitor.type === 'traceroute' }">{{ beat.msg }}</td>
                         </tr>
 
                         <tr v-if="importantHeartBeatListLength === 0">
@@ -879,6 +879,12 @@ export default {
     overflow: auto;
     white-space: pre-wrap;
     font-size: 0.85rem;
+}
+
+.traceroute-message {
+    white-space: pre-line;
+    font-family: monospace;
+    line-height: 1.45;
 }
 
 @import "../assets/vars.scss";
