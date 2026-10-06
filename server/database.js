@@ -555,7 +555,19 @@ class Database {
      */
     static createAuthDatabase(dbConfig) {
         let database;
-        if (dbConfig.type.includes("mariadb")) {
+        // embedded-mariadb also contains the string "mariadb", so it must be
+        // checked before the external MariaDB branch. Otherwise Better Auth
+        // receives undefined hostname/username and connects as user ""@localhost.
+        if (dbConfig.type === "embedded-mariadb") {
+            let embeddedMariaDB = EmbeddedMariaDB.getInstance();
+            database = mysql.createPool({
+                socketPath: embeddedMariaDB.socketPath,
+                user: embeddedMariaDB.username,
+                database: "kuma",
+                timezone: "Z",
+            });
+            Database.authMariaDB = database;
+        } else if (dbConfig.type === "mariadb") {
             database = mysql.createPool({
                 host: dbConfig.hostname,
                 port: Number(dbConfig.port),
@@ -564,15 +576,6 @@ class Database {
                 password: dbConfig.password,
                 timezone: "Z",
                 ...(dbConfig.socketPath ? { socketPath: dbConfig.socketPath } : {}),
-            });
-            Database.authMariaDB = database;
-        } else if (dbConfig.type === "embedded-mariadb") {
-            let embeddedMariaDB = EmbeddedMariaDB.getInstance();
-            database = mysql.createPool({
-                socketPath: embeddedMariaDB.socketPath,
-                user: embeddedMariaDB.username,
-                database: "kuma",
-                timezone: "Z",
             });
             Database.authMariaDB = database;
         } else {
