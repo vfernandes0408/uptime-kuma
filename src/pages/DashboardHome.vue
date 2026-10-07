@@ -300,6 +300,12 @@ export default {
                     delete exported.active;
                     delete exported.forceInactive;
                     delete exported.maintenance;
+                    delete exported.screenshot;
+                    delete exported.tags;
+                    delete exported.path;
+                    delete exported.pathName;
+                    delete exported.childrenIDs;
+                    delete exported.includeSensitiveData;
 
                     return exported;
                 });
@@ -376,11 +382,21 @@ export default {
                     const addMonitor = (monitor) => new Promise((resolve) => {
                         const cleanMonitor = { ...monitor };
 
-                        delete cleanMonitor.id;
-                        delete cleanMonitor.getUrl;
-                        delete cleanMonitor.active;
-                        delete cleanMonitor.forceInactive;
-                        delete cleanMonitor.maintenance;
+                        // Remove runtime/derived fields that are not monitor-table
+                        // columns so exports from newer versions remain importable.
+                        [
+                            "id",
+                            "getUrl",
+                            "active",
+                            "forceInactive",
+                            "maintenance",
+                            "path",
+                            "pathName",
+                            "childrenIDs",
+                            "includeSensitiveData",
+                            "screenshot",
+                            "tags",
+                        ].forEach((property) => delete cleanMonitor[property]);
 
                         if (cleanMonitor.parent != null) {
                             cleanMonitor.parent = idMap.get(String(cleanMonitor.parent)) ?? null;
