@@ -205,6 +205,10 @@ class Monitor extends BeanModel {
             ntpRootDispersionThreshold: this.ntp_root_dispersion_threshold,
             ipFamily: this.ipFamily,
             expectedTlsAlert: this.expected_tls_alert,
+            tracerouteMaxHops: this.traceroute_max_hops,
+            tracerouteProbes: this.traceroute_probes,
+            tracerouteTimeout: this.traceroute_timeout,
+            tracerouteIPv6: Boolean(this.traceroute_i_pv6),
             sftpPath: this.sftpPath,
             sshAuthMethod: this.sshAuthMethod || "password",
 
@@ -917,7 +921,13 @@ class Monitor extends BeanModel {
 
                 retries = 0;
             } catch (error) {
-                if (error?.name === "CanceledError") {
+                // Traceroute builds a complete heartbeat message containing the
+                // command output. Do not replace that log with only error.message.
+                // For errors that happen before traceroute can build its output,
+                // fall back to the generic error message.
+                if (this.type === "traceroute" && bean.msg) {
+                    // Keep the detailed traceroute log already stored in bean.msg.
+                } else if (error?.name === "CanceledError") {
                     bean.msg = `timeout by AbortSignal (${this.timeout}s)`;
                 } else {
                     bean.msg = error.message;
@@ -964,6 +974,13 @@ class Monitor extends BeanModel {
 
             log.debug("monitor", `[${this.name}] Check isImportant`);
             let isImportant = Monitor.isImportantBeat(isFirstBeat, previousBeat?.status, bean.status);
+
+            // Traceroute output is the actual monitoring log. Keep every
+            // traceroute heartbeat in the event history, not only status changes,
+            // so the complete path/output is persisted and survives refresh.
+            if (this.type === "traceroute") {
+                isImportant = true;
+            }
 
             // Mark as important if status changed, ignore pending pings,
             // Don't notify if disrupted changes to up

@@ -45,6 +45,24 @@
                 </div>
             </div>
 
+            <div class="monitor-actions-row">
+                <input
+                    ref="importMonitorsInput"
+                    type="file"
+                    accept=".json,application/json"
+                    class="d-none"
+                    @change="importMonitors"
+                />
+                <button class="btn btn-sm btn-outline-primary" :disabled="bulkActionInProgress" @click="exportAll">
+                    <font-awesome-icon icon="download" class="me-1" />
+                    {{ $t("Export Monitors") }}
+                </button>
+                <button class="btn btn-sm btn-outline-primary" :disabled="bulkActionInProgress" @click="$refs.importMonitorsInput.click()">
+                    <font-awesome-icon icon="upload" class="me-1" />
+                    {{ $t("Import Monitors") }}
+                </button>
+            </div>
+
             <!-- Line 2: Cancel + Actions (shown when selection mode is active) -->
             <div v-if="selectMode && selectedMonitorCount > 0" class="selection-row">
                 <button class="btn btn-outline-normal" @click="cancelSelectMode">
@@ -73,6 +91,17 @@
                                 <a class="dropdown-item" href="#" @click.prevent="resumeSelected">
                                     <font-awesome-icon icon="play" class="me-2" />
                                     {{ $t("Resume") }}
+                                </a>
+                            </li>
+                            <li>
+                                <a
+                                    v-if="selectedMonitorCount === 1"
+                                    class="dropdown-item"
+                                    href="#"
+                                    @click.prevent="exportSelected"
+                                >
+                                    <font-awesome-icon icon="download" class="me-2" />
+                                    {{ $t("Export") }}
                                 </a>
                             </li>
                             <li>
@@ -480,6 +509,245 @@ export default {
          * Delete each selected monitor
          * @returns {Promise<void>}
          */
+        exportAll() {
+            try {
+                const monitors = Object.values(this.$root.monitorList).map((monitor) => {
+                    const exported = { ...monitor };
+                    delete exported.id;
+                    delete exported.getUrl;
+                    delete exported.active;
+                    delete exported.forceInactive;
+                    delete exported.maintenance;
+                    delete exported.screenshot;
+                    delete exported.tags;
+                    delete exported.path;
+                    delete exported.pathName;
+                    delete exported.childrenIDs;
+                    delete exported.includeSensitiveData;
+                    return exported;
+                });
+
+                const payload = {
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    source: "Uptime Kuma",
+                    monitors,
+                };
+
+                const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                    type: "application/json;charset=utf-8",
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "uptime-kuma-monitors.json";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                this.$root.toastSuccess(this.$t("Monitors exported successfully"));
+            } catch (error) {
+                console.error("Failed to export monitors:", error);
+                this.$root.toastError(this.$t("Could not export monitors"));
+            }
+        },
+
+        importMonitors(event) {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const parsed = JSON.parse(reader.result);
+                    const monitors = Array.isArray(parsed) ? parsed : parsed.monitors;
+
+                    if (!Array.isArray(monitors)) {
+                        throw new Error("Invalid monitor export format");
+                    }
+
+                    const importedMonitors = monitors.map((monitor) => ({ ...monitor }));
+                    const groups = importedMonitors.filter((monitor) => monitor.type === "group");
+                    const regularMonitors = importedMonitors.filter((monitor) => monitor.type !== "group");
+                    const idMap = new Map();
+
+                    const getGroupDepth = (group, visited = new Set()) => {
+                        if (group.parent == null || visited.has(group.id)) {
+                            return 0;
+                        }
+                        visited.add(group.id);
+                        const parent = groups.find((candidate) => candidate.id === group.parent);
+                        return parent ? getGroupDepth(parent, visited) + 1 : 0;
+                    };
+
+                    groups.sort((a, b) => getGroupDepth(a) - getGroupDepth(b));
+
+                    let imported = 0;
+                    let failed = 0;
+
+                    const importErrors = [];
+
+                    const addMonitor = (monitor) => new Promise((resolve) => {
+                        const cleanMonitor = { ...monitor };
+
+                        // Remove runtime/derived fields that are not monitor-table
+                        // columns. This keeps imports compatible with exports generated
+                        // by newer Uptime Kuma versions.
+                        [
+                            "id",
+                            "getUrl",
+                            "active",
+                            "forceInactive",
+                            "maintenance",
+                            "path",
+                            "pathName",
+                            "childrenIDs",
+                            "includeSensitiveData",
+                            "screenshot",
+                            "tags",
+                        ].forEach((property) => delete cleanMonitor[property]);
+
+                        if (cleanMonitor.parent != null) {
+                            cleanMonitor.parent = idMap.get(String(cleanMonitor.parent)) ?? null;
+                        }
+
+                        this.$root.add(cleanMonitor, (res) => {
+                            if (res?.ok) {
+                                const newMonitorID = res.monitorID ?? res.id;
+
+                                if (monitor.id != null && newMonitorID != null) {
+                                    idMap.set(String(monitor.id), newMonitorID);
+                                }
+
+                                imported++;
+                            } else {
+                                failed++;
+                                importErrors.push({
+                                    name: monitor.name,
+                                    message: res?.msg || "Unknown import error",
+                                });
+                            }
+
+                            resolve();
+                        });
+                    });
+
+                    for (const group of groups) {
+                        await addMonitor(group);
+                    }
+                    for (const monitor of regularMonitors) {
+                        await addMonitor(monitor);
+                    }
+
+                    if (failed === 0) {
+                        this.$root.toastSuccess(this.$t("Monitors imported successfully", { count: imported }));
+                    } else {
+                        const details = importErrors
+                            .slice(0, 3)
+                            .map((error) => `${error.name}: ${error.message}`)
+                            .join(" | ");
+
+                        console.error("Monitor import errors:", importErrors);
+                        this.$root.toastError(
+                            details
+                                ? `${this.$t("Some monitors could not be imported", { imported, failed })}: ${details}`
+                                : this.$t("Some monitors could not be imported", { imported, failed })
+                        );
+                    }
+                } catch (error) {
+                    console.error("Failed to import monitors:", error);
+                    this.$root.toastError(this.$t("Could not import monitors"));
+                }
+            };
+
+            reader.onerror = () => {
+                this.$root.toastError(this.$t("Could not read monitor file"));
+            };
+
+            reader.readAsText(file);
+        },
+
+        exportSelected() {
+            const selectedIds = Object.keys(this.selectedMonitors);
+
+            if (selectedIds.length !== 1) {
+                return;
+            }
+
+            const selectedMonitor = this.$root.monitorList[selectedIds[0]];
+            if (!selectedMonitor) {
+                return;
+            }
+
+            const monitors = [];
+            const visited = new Set();
+
+            const addMonitorTree = (monitor) => {
+                if (!monitor || visited.has(monitor.id)) {
+                    return;
+                }
+
+                visited.add(monitor.id);
+                monitors.push({ ...monitor });
+
+                if (monitor.type === "group") {
+                    Object.values(this.$root.monitorList)
+                        .filter((child) => child.parent === monitor.id)
+                        .forEach(addMonitorTree);
+                }
+            };
+
+            addMonitorTree(selectedMonitor);
+
+            const exportedMonitors = monitors.map((monitor, index) => {
+                const exported = { ...monitor };
+                delete exported.getUrl;
+                delete exported.active;
+                delete exported.forceInactive;
+                delete exported.maintenance;
+
+                // A standalone export must not depend on a parent that was not exported.
+                if (index === 0) {
+                    exported.parent = null;
+                }
+
+                return exported;
+            });
+
+            const payload = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                source: "Uptime Kuma",
+                monitors: exportedMonitors,
+            };
+
+            try {
+                const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                    type: "application/json;charset=utf-8",
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = selectedMonitor.type === "group"
+                    ? "uptime-kuma-group-" + selectedMonitor.name + ".json"
+                    : "uptime-kuma-monitor-" + selectedMonitor.name + ".json";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+
+                this.$root.toastSuccess(this.$t("Monitor exported successfully"));
+                this.cancelSelectMode();
+            } catch (error) {
+                console.error("Failed to export selected monitor:", error);
+                this.$root.toastError(this.$t("Could not export monitors"));
+            }
+        },
+
         async deleteSelected() {
             if (this.bulkActionInProgress) {
                 return;
@@ -720,6 +988,14 @@ export default {
             }
         }
     }
+}
+
+.monitor-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 10px;
 }
 
 .selection-row {

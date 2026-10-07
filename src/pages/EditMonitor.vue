@@ -41,6 +41,7 @@
                                         <option value="keyword">HTTP(s) - {{ $t("Keyword") }}</option>
                                         <option value="port">TCP Port</option>
                                         <option value="ping">Ping</option>
+                                        <option value="traceroute">Traceroute</option>
                                         <option value="dns">DNS</option>
                                         <option value="docker">
                                             {{ $t("Docker Container") }}
@@ -184,6 +185,32 @@
                                     </button>
                                 </div>
                             </div>
+
+                            <!-- Traceroute options -->
+                            <template v-if="monitor.type === 'traceroute'">
+                                <div class="my-3">
+                                    <label for="traceroute-hostname" class="form-label">{{ $t("Traceroute target") }}</label>
+                                    <input id="traceroute-hostname" v-model="monitor.hostname" type="text" class="form-control" placeholder="8.8.8.8 or example.com" required />
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-4 my-3">
+                                        <label for="traceroute-max-hops" class="form-label">{{ $t("Max hops") }}</label>
+                                        <input id="traceroute-max-hops" v-model.number="monitor.tracerouteMaxHops" type="number" min="1" max="64" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4 my-3">
+                                        <label for="traceroute-probes" class="form-label">{{ $t("Probes per hop") }}</label>
+                                        <input id="traceroute-probes" v-model.number="monitor.tracerouteProbes" type="number" min="1" max="5" class="form-control" />
+                                    </div>
+                                    <div class="col-md-4 my-3">
+                                        <label for="traceroute-timeout" class="form-label">{{ $t("Timeout (ms)") }}</label>
+                                        <input id="traceroute-timeout" v-model.number="monitor.tracerouteTimeout" type="number" min="100" max="10000" class="form-control" />
+                                    </div>
+                                </div>
+                                <div class="my-3 form-check">
+                                    <input id="traceroute-ipv6" v-model="monitor.tracerouteIPv6" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" for="traceroute-ipv6">{{ $t("Use IPv6") }}</label>
+                                </div>
+                            </template>
 
                             <!-- URL -->
                             <div
@@ -3417,6 +3444,10 @@ const monitorDefaults = {
     ntpStratumThreshold: 5,
     ntpTimeOffsetThreshold: 1000,
     ntpRootDispersionThreshold: 500,
+    tracerouteMaxHops: 30,
+    tracerouteProbes: 3,
+    tracerouteTimeout: 1000,
+    tracerouteIPv6: false,
 };
 
 export default {

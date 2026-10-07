@@ -440,6 +440,21 @@ app.use(function (req, res, next) {
                 if (monitor.retryOnlyOnStatusCodeFailure !== undefined) {
                     bean.retry_only_on_status_code_failure = monitor.retryOnlyOnStatusCodeFailure;
                 }
+
+                // Explicitly map traceroute settings so they are persisted for new monitors.
+                if (monitor.tracerouteMaxHops !== undefined) {
+                    bean.tracerouteMaxHops = monitor.tracerouteMaxHops;
+                }
+                if (monitor.tracerouteProbes !== undefined) {
+                    bean.tracerouteProbes = monitor.tracerouteProbes;
+                }
+                if (monitor.tracerouteTimeout !== undefined) {
+                    bean.tracerouteTimeout = monitor.tracerouteTimeout;
+                }
+                if (monitor.tracerouteIPv6 !== undefined) {
+                    bean.tracerouteIPv6 = Boolean(monitor.tracerouteIPv6);
+                }
+
                 bean.user_id = socket.userID;
 
                 bean.validate();
@@ -619,6 +634,12 @@ app.use(function (req, res, next) {
                 bean.ntp_stratum_threshold = monitor.ntpStratumThreshold;
                 bean.ntp_time_offset_threshold = monitor.ntpTimeOffsetThreshold;
                 bean.ntp_root_dispersion_threshold = monitor.ntpRootDispersionThreshold;
+
+                // traceroute advanced options
+                bean.tracerouteMaxHops = monitor.tracerouteMaxHops;
+                bean.tracerouteProbes = monitor.tracerouteProbes;
+                bean.tracerouteTimeout = monitor.tracerouteTimeout;
+                bean.tracerouteIPv6 = Boolean(monitor.tracerouteIPv6);
 
                 // ping advanced options
                 bean.ping_numeric = monitor.ping_numeric;

@@ -37,10 +37,31 @@
             </div>
 
             <div class="shadow-box table-shadow-box table-wrapper">
-                <div class="mb-3 text-end">
+                <div class="mb-3 d-flex justify-content-end gap-2 flex-wrap">
+                    <input
+                        ref="importMonitorsInput"
+                        type="file"
+                        accept=".json,application/json"
+                        class="d-none"
+                        @change="importMonitors"
+                    />
+                    <button
+                        class="btn btn-sm btn-outline-primary"
+                        :disabled="exportingMonitors || importingMonitors"
+                        @click="exportMonitors"
+                    >
+                        {{ $t("Export Monitors") }}
+                    </button>
+                    <button
+                        class="btn btn-sm btn-outline-primary"
+                        :disabled="exportingMonitors || importingMonitors"
+                        @click="$refs.importMonitorsInput.click()"
+                    >
+                        {{ $t("Import Monitors") }}
+                    </button>
                     <button
                         class="btn btn-sm btn-outline-danger"
-                        :disabled="clearingAllEvents"
+                        :disabled="clearingAllEvents || exportingMonitors || importingMonitors"
                         @click="clearAllEventsDialog"
                     >
                         {{ $t("Clear All Events") }}
@@ -143,6 +164,8 @@ export default {
             importantHeartBeatListLength: 0,
             displayedRecords: [],
             clearingAllEvents: false,
+            exportingMonitors: false,
+            importingMonitors: false,
         };
     },
     computed: {
@@ -263,6 +286,170 @@ export default {
             } else {
                 this.perPage = this.initialPerPage;
             }
+        },
+
+        exportMonitors() {
+            this.exportingMonitors = true;
+
+            try {
+                const monitors = Object.values(this.$root.monitorList).map((monitor) => {
+                    const exported = { ...monitor };
+
+                    delete exported.id;
+                    delete exported.getUrl;
+                    delete exported.active;
+                    delete exported.forceInactive;
+                    delete exported.maintenance;
+                    delete exported.screenshot;
+                    delete exported.tags;
+                    delete exported.path;
+                    delete exported.pathName;
+                    delete exported.childrenIDs;
+                    delete exported.includeSensitiveData;
+
+                    return exported;
+                });
+
+                const payload = {
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    source: "Uptime Kuma",
+                    monitors,
+                };
+
+                const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                    type: "application/json;charset=utf-8",
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "uptime-kuma-monitors.json";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+
+                this.$root.toastSuccess(this.$t("Monitors exported successfully"));
+            } catch (error) {
+                console.error("Failed to export monitors:", error);
+                this.$root.toastError(this.$t("Could not export monitors"));
+            } finally {
+                this.exportingMonitors = false;
+            }
+        },
+
+        importMonitors(event) {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+
+            if (!file) {
+                return;
+            }
+
+            this.importingMonitors = true;
+
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const parsed = JSON.parse(reader.result);
+                    const monitors = Array.isArray(parsed) ? parsed : parsed.monitors;
+
+                    if (!Array.isArray(monitors)) {
+                        throw new Error("Invalid monitor export format");
+                    }
+
+                    const importedMonitors = monitors.map((monitor) => ({ ...monitor }));
+                    const groups = importedMonitors.filter((monitor) => monitor.type === "group");
+                    const regularMonitors = importedMonitors.filter((monitor) => monitor.type !== "group");
+                    const idMap = new Map();
+                    let imported = 0;
+                    let failed = 0;
+
+                    // Import parent groups before their children so nested group
+                    // hierarchies can be recreated with the new database IDs.
+                    const getGroupDepth = (group, visited = new Set()) => {
+                        if (group.parent == null || visited.has(group.id)) {
+                            return 0;
+                        }
+
+                        visited.add(group.id);
+                        const parent = groups.find((candidate) => candidate.id === group.parent);
+                        return parent ? getGroupDepth(parent, visited) + 1 : 0;
+                    };
+
+                    groups.sort((a, b) => getGroupDepth(a) - getGroupDepth(b));
+
+                    const addMonitor = (monitor) => new Promise((resolve) => {
+                        const cleanMonitor = { ...monitor };
+
+                        // Remove runtime/derived fields that are not monitor-table
+                        // columns so exports from newer versions remain importable.
+                        [
+                            "id",
+                            "getUrl",
+                            "active",
+                            "forceInactive",
+                            "maintenance",
+                            "path",
+                            "pathName",
+                            "childrenIDs",
+                            "includeSensitiveData",
+                            "screenshot",
+                            "tags",
+                        ].forEach((property) => delete cleanMonitor[property]);
+
+                        if (cleanMonitor.parent != null) {
+                            cleanMonitor.parent = idMap.get(String(cleanMonitor.parent)) ?? null;
+                        }
+
+                        this.$root.add(cleanMonitor, (res) => {
+                            if (res?.ok && res.monitorID != null) {
+                                if (monitor.id != null) {
+                                    idMap.set(String(monitor.id), res.monitorID);
+                                }
+                                imported++;
+                            } else {
+                                failed++;
+                                console.warn("Failed to import monitor:", monitor.name, res?.msg);
+                            }
+                            resolve();
+                        });
+                    });
+
+                    for (const monitor of groups) {
+                        await addMonitor(monitor);
+                    }
+
+                    for (const monitor of regularMonitors) {
+                        await addMonitor(monitor);
+                    }
+
+                    if (failed === 0) {
+                        this.$root.toastSuccess(
+                            this.$t("Monitors imported successfully", { count: imported })
+                        );
+                    } else {
+                        this.$root.toastError(
+                            this.$t("Some monitors could not be imported", {
+                                imported,
+                                failed,
+                            })
+                        );
+                    }
+                } catch (error) {
+                    console.error("Failed to import monitors:", error);
+                    this.$root.toastError(this.$t("Could not import monitors"));
+                } finally {
+                    this.importingMonitors = false;
+                }
+            };
+
+            reader.onerror = () => {
+                this.importingMonitors = false;
+                this.$root.toastError(this.$t("Could not read monitor file"));
+            };
+
+            reader.readAsText(file);
         },
 
         clearAllEventsDialog() {

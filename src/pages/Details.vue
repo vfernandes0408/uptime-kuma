@@ -42,6 +42,10 @@
                 </a>
                 <span v-if="monitor.type === 'port'">TCP Port {{ monitor.hostname }}:{{ monitor.port }}</span>
                 <span v-if="monitor.type === 'ping'">Ping: {{ monitor.hostname }}</span>
+                <span v-if="monitor.type === 'traceroute'">
+                    Traceroute: {{ monitor.hostname }}
+                    <pre v-if="lastHeartBeat && lastHeartBeat.msg" class="traceroute-output mt-2">{{ lastHeartBeat.msg }}</pre>
+                </span>
                 <span v-if="monitor.type === 'globalping'">
                     <a v-if="monitor.subtype === 'http'" :href="monitor.url" target="_blank" rel="noopener noreferrer">
                         {{ filterPassword(monitor.url) }}
@@ -362,7 +366,7 @@
                             <td :class="{ 'border-0': !beat.msg }">
                                 <Datetime :value="beat.time" />
                             </td>
-                            <td class="border-0">{{ beat.msg }}</td>
+                            <td class="border-0" :class="{ 'traceroute-message': monitor.type === 'traceroute' }">{{ beat.msg }}</td>
                         </tr>
 
                         <tr v-if="importantHeartBeatListLength === 0">
@@ -870,6 +874,19 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+.traceroute-output {
+    max-height: 400px;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-size: 0.85rem;
+}
+
+.traceroute-message {
+    white-space: pre-line;
+    font-family: monospace;
+    line-height: 1.45;
+}
+
 @import "../assets/vars.scss";
 
 .form-check {
