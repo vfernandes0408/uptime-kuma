@@ -359,6 +359,20 @@ export default {
                     let imported = 0;
                     let failed = 0;
 
+                    // Import parent groups before their children so nested group
+                    // hierarchies can be recreated with the new database IDs.
+                    const getGroupDepth = (group, visited = new Set()) => {
+                        if (group.parent == null || visited.has(group.id)) {
+                            return 0;
+                        }
+
+                        visited.add(group.id);
+                        const parent = groups.find((candidate) => candidate.id === group.parent);
+                        return parent ? getGroupDepth(parent, visited) + 1 : 0;
+                    };
+
+                    groups.sort((a, b) => getGroupDepth(a) - getGroupDepth(b));
+
                     const addMonitor = (monitor) => new Promise((resolve) => {
                         const cleanMonitor = { ...monitor };
 
@@ -368,10 +382,8 @@ export default {
                         delete cleanMonitor.forceInactive;
                         delete cleanMonitor.maintenance;
 
-                        if (cleanMonitor.type !== "group" && cleanMonitor.parent != null) {
+                        if (cleanMonitor.parent != null) {
                             cleanMonitor.parent = idMap.get(String(cleanMonitor.parent)) ?? null;
-                        } else if (cleanMonitor.type === "group") {
-                            cleanMonitor.parent = null;
                         }
 
                         this.$root.add(cleanMonitor, (res) => {
