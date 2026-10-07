@@ -523,12 +523,18 @@ export default {
 
             addMonitorTree(selectedMonitor);
 
-            const exportedMonitors = monitors.map((monitor) => {
+            const exportedMonitors = monitors.map((monitor, index) => {
                 const exported = { ...monitor };
                 delete exported.getUrl;
                 delete exported.active;
                 delete exported.forceInactive;
                 delete exported.maintenance;
+
+                // A standalone export must not depend on a parent that was not exported.
+                if (index === 0) {
+                    exported.parent = null;
+                }
+
                 return exported;
             });
 
