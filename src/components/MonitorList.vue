@@ -603,6 +603,7 @@ export default {
                             // Fields present in newer monitor JSON exports but not in
                             // the database schema used by this branch.
                             "screenshot",
+                            "tags",
                         ].forEach((property) => delete cleanMonitor[property]);
 
                         if (cleanMonitor.parent != null) {
