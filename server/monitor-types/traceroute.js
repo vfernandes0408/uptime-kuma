@@ -18,13 +18,13 @@ class TracerouteMonitorType extends MonitorType {
         const timeout = this.integer(monitor.tracerouteTimeout, 1000, 100, 10000);
         const command = monitor.tracerouteIPv6 ? "traceroute6" : "traceroute";
         const started = Date.now();
+        let result;
 
         try {
             if (!net.isIP(target)) {
                 await dns.lookup(target, { family: monitor.tracerouteIPv6 ? 6 : 4 });
             }
 
-            let result;
             result = await childProcessAsync.execFile(command, [
                 "-n", "-m", String(maxHops), "-w", String(Math.max(1, Math.ceil(timeout / 1000))),
                 "-q", String(probes), target,
