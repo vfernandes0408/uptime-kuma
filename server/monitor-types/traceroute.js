@@ -13,18 +13,18 @@ class TracerouteMonitorType extends MonitorType {
             throw new Error("Traceroute target is required");
         }
 
-        if (!net.isIP(target)) {
-            await dns.lookup(target, { family: monitor.tracerouteIPv6 ? 6 : 4 });
-        }
-
         const maxHops = this.integer(monitor.tracerouteMaxHops, 30, 1, 64);
         const probes = this.integer(monitor.tracerouteProbes, 3, 1, 5);
         const timeout = this.integer(monitor.tracerouteTimeout, 1000, 100, 10000);
         const command = monitor.tracerouteIPv6 ? "traceroute6" : "traceroute";
         const started = Date.now();
 
-        let result;
         try {
+            if (!net.isIP(target)) {
+                await dns.lookup(target, { family: monitor.tracerouteIPv6 ? 6 : 4 });
+            }
+
+            let result;
             result = await childProcessAsync.execFile(command, [
                 "-n", "-m", String(maxHops), "-w", String(Math.max(1, Math.ceil(timeout / 1000))),
                 "-q", String(probes), target,
@@ -35,8 +35,15 @@ class TracerouteMonitorType extends MonitorType {
         } catch (error) {
             const output = [error.stdout?.toString?.() || "", error.stderr?.toString?.() || ""]
                 .filter(Boolean).join("\n").trim();
+            const message = this.compact(output || error.message);
             heartbeat.ping = Date.now() - started;
-            throw new Error(this.compact(output || error.message));
+            heartbeat.traceroute = JSON.stringify({
+                target,
+                ipv6: !!monitor.tracerouteIPv6,
+                error: message,
+            });
+            heartbeat.msg = "Traceroute failed: " + message;
+            throw new Error(heartbeat.msg);
         }
 
         const output = result.stdout?.toString?.() || "";
