@@ -73,10 +73,10 @@ class TracerouteMonitorType extends MonitorType {
             averagePing,
             ...quality,
         });
-        heartbeat.msg = this.message(output, success, hops.length, destinationReached, quality);
+        heartbeat.msg = this.message(output, success, hops, destinationReached, quality);
 
         if (!success) {
-            throw new Error(this.message(output, false, hops.length, destinationReached, quality));
+            throw new Error(this.message(output, false, hops, destinationReached, quality));
         }
 
         heartbeat.status = UP;
@@ -183,6 +183,7 @@ class TracerouteMonitorType extends MonitorType {
 
     message(output, success, hops, destinationReached, quality) {
         let status;
+        const hopCount = hops.length;
 
         if (destinationReached && success) {
             status = "Destination reached";
@@ -207,8 +208,8 @@ class TracerouteMonitorType extends MonitorType {
         const formattedOutput = this.formatTraceroute(output);
 
         return formattedOutput
-            ? status + " in " + hops + " hops" + qualityText + pingText + ":\n" + formattedOutput
-            : status + " in " + hops + " hops" + qualityText + pingText;
+            ? status + " in " + hopCount + " hops" + qualityText + pingText + ":\n" + formattedOutput
+            : status + " in " + hopCount + " hops" + qualityText + pingText;
     }
 }
 
