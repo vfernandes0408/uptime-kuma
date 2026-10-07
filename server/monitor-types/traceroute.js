@@ -105,9 +105,9 @@ class TracerouteMonitorType extends MonitorType {
                     continue;
                 }
 
-                const ipMatch = tokens[i].match(/^\\(?([0-9a-f:.]+)\\)?$/i);
+                const ipMatch = tokens[i].match(/^\(?([0-9a-f:.]+)\)?$/i);
                 if (!ipMatch) {
-                    const rtt = tokens[i].match(/^(\\d+(?:\\.\\d+)?)$/);
+                    const rtt = tokens[i].match(/^(\d+(?:\.\d+)?)$/);
                     if (rtt && tokens[i + 1]?.toLowerCase() === "ms" && hopProbes.length) {
                         hopProbes[hopProbes.length - 1].rtt = Number(rtt[1]);
                         i++;
@@ -118,7 +118,7 @@ class TracerouteMonitorType extends MonitorType {
                 const ip = ipMatch[1];
                 let rtt = null;
                 if (i + 2 < tokens.length) {
-                    const rttMatch = tokens[i + 1].match(/^(\\d+(?:\\.\\d+)?)$/);
+                    const rttMatch = tokens[i + 1].match(/^(\d+(?:\.\d+)?)$/);
                     if (rttMatch && tokens[i + 2].toLowerCase() === "ms") {
                         rtt = Number(rttMatch[1]);
                         i += 2;
