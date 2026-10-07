@@ -57,12 +57,20 @@ class TracerouteMonitorType extends MonitorType {
             && quality.failedHops === 0
             && (destinationReached || hops.length >= maxHops || quality.failureRatio < 0.5);
 
-        heartbeat.ping = Date.now() - started;
+        const hopRtts = hops.map((hop) => hop.avgRtt).filter((rtt) => rtt != null);
+        const averagePing = hopRtts.length
+            ? Number((hopRtts.reduce((sum, rtt) => sum + rtt, 0) / hopRtts.length).toFixed(2))
+            : null;
+
+        // Report the average RTT of the observed hops, not the execution time
+        // of the traceroute command itself.
+        heartbeat.ping = averagePing;
         heartbeat.traceroute = JSON.stringify({
             target,
             ipv6: !!monitor.tracerouteIPv6,
             hops,
             destinationReached,
+            averagePing,
             ...quality,
         });
         heartbeat.msg = this.message(output, success, hops.length, destinationReached, quality);
@@ -97,22 +105,23 @@ class TracerouteMonitorType extends MonitorType {
                     continue;
                 }
 
-                const ipMatch = tokens[i].match(/^\(?([0-9a-f:.]+)\)?$/i);
+                const ipMatch = tokens[i].match(/^\\(?([0-9a-f:.]+)\\)?$/i);
                 if (!ipMatch) {
-                    const rtt = tokens[i].match(/^(\d+(?:\.\d+)?)\s*ms$/i);
-                    if (rtt && hopProbes.length) {
+                    const rtt = tokens[i].match(/^(\\d+(?:\\.\\d+)?)$/);
+                    if (rtt && tokens[i + 1]?.toLowerCase() === "ms" && hopProbes.length) {
                         hopProbes[hopProbes.length - 1].rtt = Number(rtt[1]);
+                        i++;
                     }
                     continue;
                 }
 
                 const ip = ipMatch[1];
                 let rtt = null;
-                if (i + 1 < tokens.length) {
-                    const rttMatch = tokens[i + 1].match(/^(\d+(?:\.\d+)?)\s*ms$/i);
-                    if (rttMatch) {
+                if (i + 2 < tokens.length) {
+                    const rttMatch = tokens[i + 1].match(/^(\\d+(?:\\.\\d+)?)$/);
+                    if (rttMatch && tokens[i + 2].toLowerCase() === "ms") {
                         rtt = Number(rttMatch[1]);
-                        i++;
+                        i += 2;
                     }
                 }
                 hopProbes.push({ ip, rtt });
@@ -189,11 +198,17 @@ class TracerouteMonitorType extends MonitorType {
             ? " (" + quality.failedHops + "/" + quality.totalHops + " hops without response)"
             : "";
 
+        const hopRtts = hops.map((hop) => hop.avgRtt).filter((rtt) => rtt != null);
+        const averagePing = hopRtts.length
+            ? Number((hopRtts.reduce((sum, rtt) => sum + rtt, 0) / hopRtts.length).toFixed(2))
+            : null;
+        const pingText = averagePing != null ? " - Average ping: " + averagePing + " ms" : "";
+
         const formattedOutput = this.formatTraceroute(output);
 
         return formattedOutput
-            ? status + " in " + hops + " hops" + qualityText + ":\n" + formattedOutput
-            : status + " in " + hops + " hops" + qualityText;
+            ? status + " in " + hops + " hops" + qualityText + pingText + ":\n" + formattedOutput
+            : status + " in " + hops + " hops" + qualityText + pingText;
     }
 }
 
