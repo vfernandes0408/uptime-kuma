@@ -77,6 +77,17 @@
                             </li>
                             <li>
                                 <a
+                                    v-if="selectedMonitorCount === 1"
+                                    class="dropdown-item"
+                                    href="#"
+                                    @click.prevent="exportSelected"
+                                >
+                                    <font-awesome-icon icon="download" class="me-2" />
+                                    {{ $t("Export") }}
+                                </a>
+                            </li>
+                            <li>
+                                <a
                                     class="dropdown-item text-danger"
                                     href="#"
                                     @click.prevent="$refs.confirmDelete.show()"
@@ -480,6 +491,77 @@ export default {
          * Delete each selected monitor
          * @returns {Promise<void>}
          */
+        exportSelected() {
+            const selectedIds = Object.keys(this.selectedMonitors);
+
+            if (selectedIds.length !== 1) {
+                return;
+            }
+
+            const selectedMonitor = this.$root.monitorList[selectedIds[0]];
+            if (!selectedMonitor) {
+                return;
+            }
+
+            const monitors = [];
+            const visited = new Set();
+
+            const addMonitorTree = (monitor) => {
+                if (!monitor || visited.has(monitor.id)) {
+                    return;
+                }
+
+                visited.add(monitor.id);
+                monitors.push({ ...monitor });
+
+                if (monitor.type === "group") {
+                    Object.values(this.$root.monitorList)
+                        .filter((child) => child.parent === monitor.id)
+                        .forEach(addMonitorTree);
+                }
+            };
+
+            addMonitorTree(selectedMonitor);
+
+            const exportedMonitors = monitors.map((monitor) => {
+                const exported = { ...monitor };
+                delete exported.getUrl;
+                delete exported.active;
+                delete exported.forceInactive;
+                delete exported.maintenance;
+                return exported;
+            });
+
+            const payload = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                source: "Uptime Kuma",
+                monitors: exportedMonitors,
+            };
+
+            try {
+                const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                    type: "application/json;charset=utf-8",
+                });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = selectedMonitor.type === "group"
+                    ? "uptime-kuma-group-" + selectedMonitor.name + ".json"
+                    : "uptime-kuma-monitor-" + selectedMonitor.name + ".json";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+
+                this.$root.toastSuccess(this.$t("Monitor exported successfully"));
+                this.cancelSelectMode();
+            } catch (error) {
+                console.error("Failed to export selected monitor:", error);
+                this.$root.toastError(this.$t("Could not export monitors"));
+            }
+        },
+
         async deleteSelected() {
             if (this.bulkActionInProgress) {
                 return;
