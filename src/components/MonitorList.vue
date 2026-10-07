@@ -600,6 +600,9 @@ export default {
                             "pathName",
                             "childrenIDs",
                             "includeSensitiveData",
+                            // Fields present in newer monitor JSON exports but not in
+                            // the database schema used by this branch.
+                            "screenshot",
                         ].forEach((property) => delete cleanMonitor[property]);
 
                         if (cleanMonitor.parent != null) {
