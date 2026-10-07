@@ -518,6 +518,12 @@ export default {
                     delete exported.active;
                     delete exported.forceInactive;
                     delete exported.maintenance;
+                    delete exported.screenshot;
+                    delete exported.tags;
+                    delete exported.path;
+                    delete exported.pathName;
+                    delete exported.childrenIDs;
+                    delete exported.includeSensitiveData;
                     return exported;
                 });
 
@@ -588,8 +594,9 @@ export default {
                     const addMonitor = (monitor) => new Promise((resolve) => {
                         const cleanMonitor = { ...monitor };
 
-                        // Remove runtime/export-only properties that are not accepted
-                        // by the add socket handler and can break cross-version imports.
+                        // Remove runtime/derived fields that are not monitor-table
+                        // columns. This keeps imports compatible with exports generated
+                        // by newer Uptime Kuma versions.
                         [
                             "id",
                             "getUrl",
@@ -600,8 +607,6 @@ export default {
                             "pathName",
                             "childrenIDs",
                             "includeSensitiveData",
-                            // Fields present in newer monitor JSON exports but not in
-                            // the database schema used by this branch.
                             "screenshot",
                             "tags",
                         ].forEach((property) => delete cleanMonitor[property]);
