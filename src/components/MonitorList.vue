@@ -583,27 +583,46 @@ export default {
                     let imported = 0;
                     let failed = 0;
 
+                    const importErrors = [];
+
                     const addMonitor = (monitor) => new Promise((resolve) => {
                         const cleanMonitor = { ...monitor };
-                        delete cleanMonitor.id;
-                        delete cleanMonitor.getUrl;
-                        delete cleanMonitor.active;
-                        delete cleanMonitor.forceInactive;
-                        delete cleanMonitor.maintenance;
+
+                        // Remove runtime/export-only properties that are not accepted
+                        // by the add socket handler and can break cross-version imports.
+                        [
+                            "id",
+                            "getUrl",
+                            "active",
+                            "forceInactive",
+                            "maintenance",
+                            "path",
+                            "pathName",
+                            "childrenIDs",
+                            "includeSensitiveData",
+                        ].forEach((property) => delete cleanMonitor[property]);
 
                         if (cleanMonitor.parent != null) {
                             cleanMonitor.parent = idMap.get(String(cleanMonitor.parent)) ?? null;
                         }
 
                         this.$root.add(cleanMonitor, (res) => {
-                            if (res?.ok && res.monitorID != null) {
-                                if (monitor.id != null) {
-                                    idMap.set(String(monitor.id), res.monitorID);
+                            if (res?.ok) {
+                                const newMonitorID = res.monitorID ?? res.id;
+
+                                if (monitor.id != null && newMonitorID != null) {
+                                    idMap.set(String(monitor.id), newMonitorID);
                                 }
+
                                 imported++;
                             } else {
                                 failed++;
+                                importErrors.push({
+                                    name: monitor.name,
+                                    message: res?.msg || "Unknown import error",
+                                });
                             }
+
                             resolve();
                         });
                     });
@@ -618,7 +637,17 @@ export default {
                     if (failed === 0) {
                         this.$root.toastSuccess(this.$t("Monitors imported successfully", { count: imported }));
                     } else {
-                        this.$root.toastError(this.$t("Some monitors could not be imported", { imported, failed }));
+                        const details = importErrors
+                            .slice(0, 3)
+                            .map((error) => `${error.name}: ${error.message}`)
+                            .join(" | ");
+
+                        console.error("Monitor import errors:", importErrors);
+                        this.$root.toastError(
+                            details
+                                ? `${this.$t("Some monitors could not be imported", { imported, failed })}: ${details}`
+                                : this.$t("Some monitors could not be imported", { imported, failed })
+                        );
                     }
                 } catch (error) {
                     console.error("Failed to import monitors:", error);
